@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Monitor de Acciones</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f4f4f2;
+    --surface: #ffffff;
+    --surface2: #f0efed;
+    --border: #e2e0db;
+    --border2: #cccac4;
+    --text: #1a1a18;
+    --muted: #888680;
+    --faint: #b8b6b0;
+    --up: #2d7a4f;
+    --up-bg: #eaf4ee;
+    --dn: #b83232;
+    --dn-bg: #faeaea;
+    --accent: #1a1a18;
+    --accent-bg: #f0efed;
+    --mono: 'DM Mono', monospace;
+    --sans: 'DM Sans', sans-serif;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--sans); background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  .header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 18px 32px;
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 16px; flex-wrap: wrap;
+  }
+  .logo { font-family: var(--mono); font-size: 16px; font-weight: 500; color: var(--text); letter-spacing: -0.3px; }
+  .header-sub { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 3px; }
+  .header-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+  .live-dot { display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--up); animation: pulse 2s ease infinite; }
+  .dot.paused { background: var(--faint); animation: none; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.35} }
+
+  .btn {
+    font-family: var(--mono); font-size: 11px; padding: 6px 14px;
+    border-radius: 5px; border: 1px solid var(--border2);
+    background: var(--surface); color: var(--muted); cursor: pointer; transition: all 0.15s;
+  }
+  .btn:hover { border-color: var(--text); color: var(--text); }
+  .btn-primary { background: var(--text); border-color: var(--text); color: #fff; }
+  .btn-primary:hover { background: #333; }
+  .btn-danger { border-color: var(--dn); color: var(--dn); background: var(--surface); }
+  .btn-danger:hover { background: var(--dn-bg); }
+
+  .main { padding: 28px 32px; max-width: 1100px; margin: 0 auto; }
+
+  .stats-bar {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 12px; margin-bottom: 32px;
+  }
+  .stat {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 14px 18px;
+  }
+  .stat-label { font-family: var(--mono); font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing:.06em; margin-bottom: 6px; }
+  .stat-val { font-family: var(--mono); font-size: 22px; font-weight: 500; color: var(--text); }
+  .stat-val.up { color: var(--up); }
+  .stat-val.dn { color: var(--dn); }
+  .stat-val.fired { color: var(--dn); }
+
+  .section { margin-bottom: 32px; }
+  .section-title {
+    font-family: var(--mono); font-size: 10px; color: var(--muted);
+    text-transform: uppercase; letter-spacing:.1em; margin-bottom: 14px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .section-title::after { content:''; flex:1; height:1px; background:var(--border); }
+
+  .add-bar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+  .hint { font-family: var(--mono); font-size: 10px; color: var(--faint); margin-bottom: 14px; }
+
+  .input {
+    font-family: var(--mono); font-size: 12px; padding: 6px 12px;
+    border: 1px solid var(--border2); border-radius: 5px;
+    background: var(--surface); color: var(--text); outline: none; transition: border-color 0.15s;
+  }
+  .input:focus { border-color: var(--text); }
+  .input::placeholder { color: var(--faint); }
+
+  .stocks-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+  .stock-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 16px;
+    transition: box-shadow 0.2s, border-color 0.2s;
+    animation: fadeIn 0.3s ease;
+  }
+  .stock-card:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.06); border-color: var(--border2); }
+  .stock-card.alert-triggered { border-color: var(--dn); background: var(--dn-bg); }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:translateY(0)} }
+
+  .card-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+  .ticker { font-family: var(--mono); font-size: 14px; font-weight: 500; color: var(--text); }
+  .stock-name { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .remove-btn {
+    width: 20px; height: 20px; border-radius: 50%; background: none; border: none;
+    cursor: pointer; color: var(--faint); font-size: 15px;
+    display: flex; align-items: center; justify-content: center; transition: all 0.15s;
+  }
+  .remove-btn:hover { color: var(--dn); background: var(--dn-bg); }
+
+  .price-row { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+  .price { font-family: var(--mono); font-size: 22px; font-weight: 500; color: var(--text); }
+  .change { font-family: var(--mono); font-size: 11px; font-weight: 500; padding: 2px 7px; border-radius: 4px; }
+  .change.up { background: var(--up-bg); color: var(--up); }
+  .change.dn { background: var(--dn-bg); color: var(--dn); }
+  .change.neutral { background: var(--surface2); color: var(--muted); }
+
+  .alert-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+  .chip { font-family: var(--mono); font-size: 10px; padding: 2px 7px; border-radius: 4px; border: 1px solid var(--border); background: var(--surface2); }
+  .chip.pending { color: var(--muted); }
+  .chip.fired { background: var(--dn-bg); border-color: #e8b0b0; color: var(--dn); }
+
+  .card-footer { font-family: var(--mono); font-size: 10px; color: var(--faint); margin-top: 8px; }
+  .error-msg { font-family: var(--mono); font-size: 10px; color: var(--dn); margin-top: 6px; }
+
+  .alert-form {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 16px;
+    display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end;
+  }
+  .form-group { display: flex; flex-direction: column; gap: 5px; }
+  .form-label { font-family: var(--mono); font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing:.06em; }
+
+  .alerts-list { display: flex; flex-direction: column; gap: 6px; }
+  .alert-row {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 14px;
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    animation: fadeIn 0.3s ease;
+  }
+  .alert-row.fired { border-color: #e8b0b0; background: var(--dn-bg); }
+  .alert-ticker-tag {
+    font-family: var(--mono); font-size: 12px; font-weight: 500;
+    background: var(--surface2); border: 1px solid var(--border);
+    padding: 3px 9px; border-radius: 4px; min-width: 70px; text-align: center;
+  }
+  .alert-desc { font-size: 12px; color: var(--muted); flex: 1; min-width: 120px; }
+  .alert-current { font-family: var(--mono); font-size: 11px; color: var(--faint); }
+  .status-badge { font-family: var(--mono); font-size: 10px; padding: 3px 9px; border-radius: 4px; white-space: nowrap; }
+  .status-pending { background: var(--surface2); color: var(--muted); }
+  .status-fired { background: var(--dn-bg); color: var(--dn); }
+
+  .log {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px 14px;
+    max-height: 130px; overflow-y: auto;
+    font-family: var(--mono); font-size: 11px; color: var(--muted);
+  }
+  .log::-webkit-scrollbar { width: 4px; }
+  .log::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+  .log-entry { padding: 3px 0; border-bottom: 1px solid var(--border); line-height: 1.5; }
+  .log-entry:last-child { border-bottom: none; }
+  .log-entry.warn { color: var(--dn); }
+  .log-entry .ts { color: var(--faint); margin-right: 8px; }
+  .empty { font-size: 12px; color: var(--faint); padding: 10px 0; font-family: var(--mono); }
+  .divider { height: 1px; background: var(--border); margin: 28px 0; }
+
+  @media(max-width:600px){ .header,.main{padding:16px;} .stocks-grid{grid-template-columns:1fr 1fr;} }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <div class="logo">monitor-acciones</div>
+    <div class="header-sub">Precios en tiempo real · Alertas personales</div>
+  </div>
+  <div class="header-right">
+    <div class="live-dot"><span class="dot" id="dot"></span><span id="status-txt">Actualizando</span></div>
+    <span id="last-ts" style="font-family:var(--mono);font-size:11px;color:var(--faint)"></span>
+    <button class="btn" onclick="togglePolling()" id="toggle-btn">Pausar</button>
+    <button class="btn btn-primary" onclick="refreshAll()">↻ Actualizar</button>
+  </div>
+</div>
+
+<div class="main">
+
+  <div class="stats-bar">
+    <div class="stat"><div class="stat-label">Acciones</div><div class="stat-val" id="s-total">0</div></div>
+    <div class="stat"><div class="stat-label">Alzas hoy</div><div class="stat-val up" id="s-up">0</div></div>
+    <div class="stat"><div class="stat-label">Bajas hoy</div><div class="stat-val dn" id="s-dn">0</div></div>
+    <div class="stat"><div class="stat-label">Alertas</div><div class="stat-val" id="s-alerts">0</div></div>
+    <div class="stat"><div class="stat-label">Disparadas</div><div class="stat-val fired" id="s-fired">0</div></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Universo de acciones</div>
+    <div class="add-bar">
+      <input class="input" id="new-ticker" placeholder="SAN.MC" maxlength="12" style="width:120px" onkeydown="if(event.key==='Enter')addStock()">
+      <button class="btn btn-primary" onclick="addStock()">+ Añadir</button>
+    </div>
+    <div class="hint">Españolas: SAN.MC · IBE.MC · ITX.MC · BBVA.MC &nbsp;|&nbsp; Americanas: AAPL · NVDA · MSFT · TSLA</div>
+    <div class="stocks-grid" id="stocks-grid"><div class="empty">Cargando...</div></div>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="section">
+    <div class="section-title">Nueva alerta</div>
+    <div class="alert-form">
+      <div class="form-group">
+        <span class="form-label">Acción</span>
+        <select class="input" id="al-ticker" style="width:130px"></select>
+      </div>
+      <div class="form-group">
+        <span class="form-label">Condición</span>
+        <select class="input" id="al-cond" style="width:230px">
+          <option value="below">Precio por debajo de</option>
+          <option value="above">Precio por encima de</option>
+          <option value="change_below">Cambio diario % menor que</option>
+          <option value="change_above">Cambio diario % mayor que</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <span class="form-label">Valor</span>
+        <input class="input" id="al-val" type="number" step="0.01" placeholder="4.50" style="width:110px">
+      </div>
+      <div class="form-group">
+        <span class="form-label">Nota (opcional)</span>
+        <input class="input" id="al-note" type="text" placeholder="ej: soporte clave" style="width:150px">
+      </div>
+      <button class="btn btn-primary" onclick="addAlert()">Crear alerta</button>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Alertas configuradas</div>
+    <div class="alerts-list" id="alerts-list"><div class="empty">No hay alertas. Crea una arriba.</div></div>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="section">
+    <div class="section-title">Registro</div>
+    <div class="log" id="log"></div>
+  </div>
+
+</div>
+
+<script>
+const DEFAULT_TICKERS = ['SAN.MC'];
+const INTERVAL = 60000;
+let stocks = {}, alerts = [], polling = true, timer = null;
+
+function ts() { return new Date().toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit',second:'2-digit'}); }
+
+function log(msg, warn=false) {
+  const el = document.getElementById('log');
+  const div = document.createElement('div');
+  div.className = 'log-entry'+(warn?' warn':'');
+  div.innerHTML = `<span class="ts">${ts()}</span>${msg}`;
+  el.prepend(div);
+  while(el.children.length > 80) el.removeChild(el.lastChild);
+}
+
+async function fetchPrice(ticker) {
+  const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1m&range=1d`;
+  const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(yahooUrl)}`;
+  const r = await fetch(proxyUrl);
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  const wrapper = await r.json();
+  const j = JSON.parse(wrapper.contents);
+  if (!j.chart || !j.chart.result || !j.chart.result[0]) throw new Error('Sin datos');
+  const meta = j.chart.result[0].meta;
+  const price = meta.regularMarketPrice || meta.chartPreviousClose;
+  const prev = meta.chartPreviousClose || meta.regularMarketPreviousClose || price;
+  const chg = prev ? ((price - prev) / prev * 100) : 0;
+  const name = meta.shortName || meta.longName || ticker;
+  return { price, prev, chg, name };
+}
+
+async function refreshAll() {
+  document.getElementById('dot').classList.remove('paused');
+  let updated = 0;
+  for (const t of Object.keys(stocks)) {
+    try {
+      const d = await fetchPrice(t);
+      stocks[t] = {...stocks[t], ...d, updated: Date.now(), error: null};
+      updated++;
+    } catch(e) {
+      stocks[t].error = 'Sin datos';
+      log(`Error en ${t}: ${e.message}`, true);
+    }
+  }
+  if (updated > 0) log(`${updated} acción(es) actualizadas.`);
+  document.getElementById('last-ts').textContent = ts();
+  checkAlerts(); renderAll();
+}
+
+function checkAlerts() {
+  alerts.forEach(a => {
+    if (a.dismissed) return;
+    const s = stocks[a.ticker];
+    if (!s || s.error || s.price == null) return;
+    let triggered = false;
+    if (a.cond==='below' && s.price < a.val) triggered = true;
+    if (a.cond==='above' && s.price > a.val) triggered = true;
+    if (a.cond==='change_below' && s.chg < a.val) triggered = true;
+    if (a.cond==='change_above' && s.chg > a.val) triggered = true;
+    if (triggered && !a.fired) {
+      a.fired = true; a.firedAt = Date.now();
+      log(`⚡ ALERTA: ${a.ticker} — ${condLabel(a.cond)}${a.val}${condUnit(a.cond)}${a.note?' · '+a.note:''}`, true);
+      try {
+        const ctx = new AudioContext(), o = ctx.createOscillator(), g = ctx.createGain();
+        o.connect(g); g.connect(ctx.destination);
+        o.frequency.value = 660;
+        g.gain.setValueAtTime(0.25, ctx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime+0.6);
+        o.start(); o.stop(ctx.currentTime+0.6);
+      } catch(e) {}
+    }
+  });
+}
+
+function condLabel(c) { return {below:'precio < ',above:'precio > ',change_below:'cambio < ',change_above:'cambio > '}[c]||c; }
+function condUnit(c) { return c.startsWith('change') ? '%' : '€'; }
+function renderAll() { renderStocks(); renderAlerts(); updateStats(); }
+
+function renderStocks() {
+  const g = document.getElementById('stocks-grid');
+  const tickers = Object.keys(stocks);
+  if (!tickers.length) { g.innerHTML='<div class="empty">Añade tickers para comenzar.</div>'; updateAlertSelect(); return; }
+  g.innerHTML = '';
+  tickers.forEach(t => {
+    const s = stocks[t];
+    const hasFired = alerts.some(a => a.ticker===t && a.fired && !a.dismissed);
+    const card = document.createElement('div');
+    card.className = 'stock-card'+(hasFired?' alert-triggered':'');
+    const chgCls = s.chg > 0 ? 'up' : s.chg < 0 ? 'dn' : 'neutral';
+    const chgStr = s.chg != null ? (s.chg>0?'+':'')+s.chg.toFixed(2)+'%' : '—';
+    const priceStr = s.price != null ? s.price.toFixed(2)+' €' : '···';
+    const chips = alerts.filter(a=>a.ticker===t&&!a.dismissed).map(a =>
+      `<span class="chip ${a.fired?'fired':'pending'}">${a.fired?'⚡':'◇'} ${condLabel(a.cond)}${a.val}${condUnit(a.cond)}</span>`
+    ).join('');
+    card.innerHTML = `
+      <div class="card-top">
+        <div><div class="ticker">${t}</div><div class="stock-name">${s.name||''}</div></div>
+        <button class="remove-btn" onclick="removeStock('${t}')">×</button>
+      </div>
+      <div class="price-row">
+        <div class="price">${priceStr}</div>
+        <span class="change ${chgCls}">${chgStr}</span>
+      </div>
+      ${s.error?`<div class="error-msg">⚠ ${s.error}</div>`:''}
+      ${chips?`<div class="alert-chips">${chips}</div>`:''}
+      <div class="card-footer">${s.updated?'Act. '+new Date(s.updated).toLocaleTimeString('es-ES'):'Cargando...'}</div>
+    `;
+    g.appendChild(card);
+  });
+  updateAlertSelect();
+}
+
+function renderAlerts() {
+  const el = document.getElementById('alerts-list');
+  if (!alerts.length) { el.innerHTML='<div class="empty">No hay alertas. Crea una arriba.</div>'; return; }
+  el.innerHTML = '';
+  alerts.forEach((a, i) => {
+    const s = stocks[a.ticker];
+    const cur = s&&!s.error&&s.price!=null ? s.price.toFixed(2)+'€ / '+(s.chg>=0?'+':'')+s.chg.toFixed(2)+'%' : '—';
+    const row = document.createElement('div');
+    row.className = 'alert-row'+(a.fired&&!a.dismissed?' fired':'');
+    row.innerHTML = `
+      <span class="alert-ticker-tag">${a.ticker}</span>
+      <span class="alert-desc">${condLabel(a.cond)}${a.val}${condUnit(a.cond)}${a.note?' · <em>'+a.note+'</em>':''}</span>
+      <span class="alert-current">${cur}</span>
+      <span class="status-badge ${a.fired?'status-fired':'status-pending'}">${a.fired?'⚡ Disparada · '+new Date(a.firedAt).toLocaleTimeString('es-ES'):'◇ Pendiente'}</span>
+      ${a.fired?`<button class="btn" onclick="resetAlert(${i})" style="font-size:10px;padding:4px 10px">Resetear</button>`:''}
+      <button class="btn btn-danger" onclick="removeAlert(${i})" style="font-size:10px;padding:4px 10px">Eliminar</button>
+    `;
+    el.appendChild(row);
+  });
+}
+
+function updateStats() {
+  document.getElementById('s-total').textContent = Object.keys(stocks).length;
+  document.getElementById('s-alerts').textContent = alerts.filter(a=>!a.dismissed).length;
+  document.getElementById('s-fired').textContent = alerts.filter(a=>a.fired&&!a.dismissed).length;
+  const vals = Object.values(stocks).filter(s=>s.chg!=null);
+  document.getElementById('s-up').textContent = vals.filter(s=>s.chg>0).length;
+  document.getElementById('s-dn').textContent = vals.filter(s=>s.chg<0).length;
+}
+
+function updateAlertSelect() {
+  const sel = document.getElementById('al-ticker'), cur = sel.value;
+  sel.innerHTML = Object.keys(stocks).map(t=>`<option value="${t}">${t}</option>`).join('');
+  if (cur && stocks[cur]) sel.value = cur;
+}
+
+function addStock() {
+  const inp = document.getElementById('new-ticker');
+  const t = inp.value.trim().toUpperCase();
+  if (!t || stocks[t]) { inp.value=''; return; }
+  stocks[t] = {price:null, chg:null, name:t, error:null};
+  inp.value = '';
+  log(`Añadida ${t}. Cargando precio...`);
+  renderAll();
+  fetchPrice(t).then(d => {
+    stocks[t] = {...stocks[t], ...d, updated:Date.now(), error:null};
+    log(`${t}: ${d.price.toFixed(2)}€ (${d.chg>=0?'+':''}${d.chg.toFixed(2)}%)`);
+    checkAlerts(); renderAll();
+  }).catch(e => { stocks[t].error='Sin datos'; log(`Error en ${t}: ${e.message}`,true); renderAll(); });
+}
+
+function removeStock(t) { delete stocks[t]; alerts=alerts.filter(a=>a.ticker!==t); log(`Eliminada ${t}.`); renderAll(); }
+
+function addAlert() {
+  const t=document.getElementById('al-ticker').value;
+  const c=document.getElementById('al-cond').value;
+  const v=parseFloat(document.getElementById('al-val').value);
+  const n=document.getElementById('al-note').value.trim();
+  if (!t||isNaN(v)) return;
+  alerts.push({ticker:t,cond:c,val:v,note:n,fired:false,firedAt:null,dismissed:false});
+  document.getElementById('al-val').value='';
+  document.getElementById('al-note').value='';
+  log(`Alerta creada: ${t} — ${condLabel(c)}${v}${condUnit(c)}${n?' · '+n:''}`);
+  checkAlerts(); renderAll();
+}
+
+function removeAlert(i) { alerts.splice(i,1); renderAll(); }
+function resetAlert(i) { alerts[i].fired=false; alerts[i].firedAt=null; log(`Alerta ${alerts[i].ticker} reseteada.`); renderAll(); }
+
+function togglePolling() {
+  polling = !polling;
+  document.getElementById('toggle-btn').textContent = polling ? 'Pausar' : 'Reanudar';
+  document.getElementById('dot').classList.toggle('paused', !polling);
+  document.getElementById('status-txt').textContent = polling ? 'Actualizando' : 'Pausado';
+  if (polling) { scheduleNext(); log('Actualización reanudada.'); }
+  else { clearTimeout(timer); log('Actualización pausada.'); }
+}
+
+function scheduleNext() {
+  if (!polling) return;
+  clearTimeout(timer);
+  timer = setTimeout(async()=>{ await refreshAll(); scheduleNext(); }, INTERVAL);
+}
+
+// Guardar y cargar datos del navegador
+function saveData() {
+  localStorage.setItem('ma_tickers', JSON.stringify(Object.keys(stocks)));
+  localStorage.setItem('ma_alerts', JSON.stringify(alerts));
+}
+
+function loadData() {
+  try {
+    const savedTickers = JSON.parse(localStorage.getItem('ma_tickers'));
+    const savedAlerts = JSON.parse(localStorage.getItem('ma_alerts'));
+    if (savedTickers && savedTickers.length > 0) {
+      savedTickers.forEach(t => { stocks[t] = {price:null,chg:null,name:t,error:null}; });
+    } else {
+      DEFAULT_TICKERS.forEach(t => { stocks[t]={price:null,chg:null,name:t,error:null}; });
+    }
+    if (savedAlerts) {
+      alerts = savedAlerts;
+    }
+  } catch(e) {
+    DEFAULT_TICKERS.forEach(t => { stocks[t]={price:null,chg:null,name:t,error:null}; });
+  }
+}
+
+// Guardar automáticamente al añadir/eliminar acciones y alertas
+const _addStock = addStock;
+const _removeStock = removeStock;
+const _addAlert = addAlert;
+const _removeAlert = removeAlert;
+const _resetAlert = resetAlert;
+
+function addStock() { _addStock(); saveData(); }
+function removeStock(t) { _removeStock(t); saveData(); }
+function addAlert() { _addAlert(); saveData(); }
+function removeAlert(i) { _removeAlert(i); saveData(); }
+function resetAlert(i) { _resetAlert(i); saveData(); }
+
+loadData();
+renderAll();
+log('Aplicación iniciada. Configuración cargada.');
+refreshAll().then(()=>scheduleNext());
+</script>
+</body>
+</html>
